@@ -34,6 +34,12 @@ class AWSHelper(BaseHelper):
     def __init__(self):
         self._session = boto3.session.Session()
 
+    def ecr_get_authorization(self):
+        client = self._session.client('ecr')
+        response = client.get_authorization_token()
+        user, token = b64decode(response['authorizationData'][0]['authorizationToken']).split(':')
+        return (user, token, response['authorizationData'][0]['proxyEndpoint'])
+
     def ecr_prune(self, repository_name):
         client = self._session.client('ecr')
         response = client.list_images(
@@ -134,8 +140,10 @@ def ecr():
     pass
 
 @ecr.command()
-def login():
-    logincmd = subprocess.check_output(['aws', 'ecr', 'get-login']).split()
+@pass_aws
+def login(aws):
+    (user, token, endpoint) = aws.ecr_get_authorization()
+    logincmd = ['docker', 'login', '-u', user, '-p', token, endpoint]
     subprocess.call(logincmd)
 
 @ecr.command()
