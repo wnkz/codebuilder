@@ -33,7 +33,26 @@ class BaseHelper(object):
 class AWSHelper(BaseHelper):
     def __init__(self):
         self._session = boto3.session.Session()
-        pass
+
+    def ecr_prune(self, repository_name):
+        client = self._session.client('ecr')
+        response = client.list_images(
+            repositoryName=repository_name,
+            filter={
+                'tagStatus': 'UNTAGGED'
+            }
+        )
+        images_to_delete = response['imageIds']
+        if not images_to_delete:
+            click.echo('No images to delete')
+            return
+
+        click.echo('Preparing to delete {} images ...'.format(len(images_to_delete)))
+        response = client.batch_delete_image(
+            repositoryName=repository_name,
+            imageIds=images_to_delete
+        )
+        click.echo('Deleted {} images'.format(len(response['imageIds'])))
 
     def kms_decrypt(self, blob):
         return self._session.client('kms').decrypt(CiphertextBlob=b64decode(blob))['Plaintext']
@@ -61,14 +80,10 @@ class DockerHelper(BaseHelper):
         if self._image_version:
             cmdline += ['--build-arg', 'app_version=' + self._image_version]
         cmdline += ['.']
-        click.echo(cmdline)
-
         subprocess.call(cmdline)
 
     def tag(self):
         cmdline = ['docker', 'tag', self._full_image_name, '{}:{}'.format(self._image_name, self._image_version)]
-        click.echo(cmdline)
-
         subprocess.call(cmdline)
 
     def image_name(self):
@@ -105,19 +120,29 @@ def kms():
 
 @kms.command()
 @click.argument('blob')
+@click.option('--format', type=click.Choice(['text', 'json']), default='text')
+@click.option('--source-json-file', type=click.File('r+'))
+@click.option('--in-place', is_flag=True)
+@click.argument('jsonpath', nargs=-1)
 @pass_aws
-def decrypt(aws, blob):
-    click.echo(aws.kms_decrypt(blob))
+def decrypt(aws, blob, format, source_json_file, in_place, jsonpath):
+    value = aws.kms_decrypt(blob)
+    aws.output(value, format, jsonpath, source_json_file, in_place)
 
 @aws.group()
 def ecr():
     pass
 
 @ecr.command()
-@click.pass_context
-def login(ctx):
+def login():
     logincmd = subprocess.check_output(['aws', 'ecr', 'get-login']).split()
     subprocess.call(logincmd)
+
+@ecr.command()
+@click.argument('repository-name', envvar='IMAGE_REPO_NAME')
+@pass_aws
+def prune(aws, repository_name):
+    aws.ecr_prune(repository_name)
 
 @cli.group()
 @click.option('--aws-account-id', envvar='AWS_ACCOUNT_ID', help='AWS Account Number [default: $AWS_ACCOUNT_ID]')
@@ -132,18 +157,14 @@ def docker(ctx, aws_account_id, aws_region, build_id, image_name, version):
 @docker.command()
 @click.pass_context
 def build(ctx):
-    click.echo(ctx.obj)
     ctx.obj.build()
     ctx.obj.tag()
-    pass
 
 @docker.command()
 @click.pass_context
 def push(ctx):
     cmdline = ['docker', 'push', ctx.obj.image_name()]
-    click.echo(cmdline)
     subprocess.call(cmdline)
-    pass
 
 @docker.command('get-image')
 @click.option('--format', type=click.Choice(['text', 'json']), default='json')

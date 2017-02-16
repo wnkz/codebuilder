@@ -15,7 +15,8 @@ setup(
     install_requires = [
         'Click',
         'boto3',
-        'dpath'
+        'dpath',
+        'awscli'
     ],
     entry_points = {
         'console_scripts': [
