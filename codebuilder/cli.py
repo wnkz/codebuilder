@@ -49,16 +49,13 @@ class AWSHelper(BaseHelper):
             }
         )
         images_to_delete = response['imageIds']
-        if not images_to_delete:
-            click.echo('No images to delete')
-            return
-
-        click.echo('Preparing to delete {} images ...'.format(len(images_to_delete)))
-        response = client.batch_delete_image(
-            repositoryName=repository_name,
-            imageIds=images_to_delete
-        )
-        click.echo('Deleted {} images'.format(len(response['imageIds'])))
+        if images_to_delete:
+            response = client.batch_delete_image(
+                repositoryName=repository_name,
+                imageIds=images_to_delete
+            )
+            for image in response['imageIds']:
+                click.echo('Deleted image: {}'.format(image['imageDigest']))
 
     def kms_decrypt(self, blob):
         return self._session.client('kms').decrypt(CiphertextBlob=b64decode(blob))['Plaintext']
@@ -74,10 +71,6 @@ class DockerHelper(BaseHelper):
         self._image_name = self._aws_account_id + '.dkr.ecr.' + self._aws_region + '.amazonaws.com/' + image_name
         self._full_image_name = '{}:latest'.format(self._image_name)
         self._versionned_image_name = '{}:{}'.format(self._image_name, self._image_version)
-
-    def info(self):
-        cmdline = ['docker', 'info']
-        subprocess.call(cmdline)
 
     def build(self):
         cmdline = ['docker', 'build', '-t']
