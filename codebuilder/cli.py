@@ -17,7 +17,7 @@ class BaseHelper(object):
         pass
 
     def get_version(self):
-        version = 'edge'
+        version = None
         if os.path.isfile('VERSION'):
             with click.open_file('VERSION', 'r') as f:
                 version = f.read().strip()
@@ -75,6 +75,8 @@ class AWSHelper(BaseHelper):
 
     def codepipeline_get_artifact_attribute(self, name, attribute):
         artifacts = self.codepipeline_get_artifacts_revision()
+        if not artifacts:
+            return None
         if not name:
             return artifacts[0].get(attribute, None)
         else:
@@ -119,16 +121,21 @@ class DockerHelper(AWSHelper):
 
         self._image_name = image_name
         self._version = self.get_version()
-        self._revision_id = self.codepipeline_get_artifact_attribute(artifact_name, 'revisionId')[:8]
         self._branch = os.getenv('GITHUB_BRANCH', None)
         self._build_id = os.getenv('CODEBUILD_BUILD_ID', None)
+        self._revision_id = self.codepipeline_get_artifact_attribute(artifact_name, 'revisionId')
+        if self._revision_id:
+            self._short_revision_id = self._revision_id[:8]
 
         self._available_tags = {
-            'versionned_latest': '{}-latest'.format(self._version)
+            'latest': 'latest'
         }
 
-        if self._revision_id:
-            self._available_tags['full'] = '{}-{}'.format(self._version, self._revision_id)
+        if self._version:
+            self._available_tags['version'] = self._version
+
+        if self._revision_id and self._version:
+            self._available_tags['full'] = '{}-{}'.format(self._version, self._short_revision_id)
 
         if self._branch:
             self._available_tags['branch'] = self._branch
@@ -194,10 +201,11 @@ def login(aws):
     subprocess.call(logincmd)
 
 # TODO: Add option to delete old images
-@ecr.command()
+@ecr.command(short_help='Delete images from ECR')
 @click.argument('repository-name', envvar='IMAGE_NAME')
 @pass_aws
 def prune(aws, repository_name):
+    """Delete images in the ECR repository (default from $IMAGE_NAME)"""
     aws.ecr_prune(repository_name)
 
 
@@ -226,22 +234,30 @@ def docker(ctx, image_name, artifact_name):
     ctx.obj = DockerHelper(image_name, artifact_name)
 
 
+DEFAULT_TAG_CHOICE = [
+    'full',
+    'branch',
+    'version',
+    'latest'
+]
+
+
 @docker.command('get-image')
-@click.argument('tag', type=click.Choice(['full', 'branch', 'versionned_latest']))
+@click.argument('tag', type=click.Choice(DEFAULT_TAG_CHOICE))
 @click.option('--format', type=click.Choice(['text', 'json']), default='json')
 @click.option('--source-json-file', type=click.File('r+'))
 @click.option('--in-place', is_flag=True)
 @click.argument('jsonpath', nargs=-1)
 @click.pass_obj
 def get_image(dkr, tag, format, source_json_file, in_place, jsonpath):
-    tag = dkr.get_image(tag)
-    if tag:
-        dkr.output(tag, format, jsonpath, source_json_file, in_place)
+    image = dkr.get_image(tag)
+    if image:
+        dkr.output(image, format, jsonpath, source_json_file, in_place)
 
 
 @docker.command('get-tag')
-@click.argument('tag', type=click.Choice(['full', 'branch', 'versionned_latest']))
-@click.option('--format', type=click.Choice(['text', 'json']), default='json')
+@click.argument('tag', type=click.Choice(DEFAULT_TAG_CHOICE))
+@click.option('--format', type=click.Choice(['text', 'json']), default='text')
 @click.option('--source-json-file', type=click.File('r+'))
 @click.option('--in-place', is_flag=True)
 @click.argument('jsonpath', nargs=-1)
@@ -253,7 +269,7 @@ def get_tag(dkr, tag, format, source_json_file, in_place, jsonpath):
 
 
 @docker.command('apply-tags')
-@click.option('--tag', '-t', multiple=True, type=click.Choice(['full', 'branch', 'versionned_latest']))
+@click.option('--tag', '-t', multiple=True, type=click.Choice(DEFAULT_TAG_CHOICE))
 @click.pass_obj
 def apply_tags(dkr, tag):
     commands = dkr.get_apply_tags_commands(tag)
