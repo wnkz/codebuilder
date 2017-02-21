@@ -251,7 +251,7 @@ def get_tag(dkr, tag, format, source_json_file, in_place, jsonpath):
 
 
 @docker.command('apply-tags')
-@click.option('--tag', multiple=True, type=click.Choice(['full', 'branch', 'versionned_latest']))
+@click.option('--tag', '-t', multiple=True, type=click.Choice(['full', 'branch', 'versionned_latest']))
 @click.pass_obj
 def apply_tags(dkr, tag):
     commands = dkr.get_apply_tags_commands(tag)
