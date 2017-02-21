@@ -40,6 +40,7 @@ class BaseHelper(object):
             click.echo(value)
 
 
+# TODO: Better permissions checking
 class AWSHelper(BaseHelper):
 
     def __init__(self):
@@ -120,7 +121,7 @@ class DockerHelper(AWSHelper):
         self._version = self.get_version()
         self._revision_id = self.codepipeline_get_artifact_attribute(artifact_name, 'revisionId')[:8]
         self._branch = os.getenv('GITHUB_BRANCH', None)
-        self._build_id = os.getenv('CODEBUILD_BUILD_ID', 'CUSTOM_BUILD')
+        self._build_id = os.getenv('CODEBUILD_BUILD_ID', None)
 
         self._available_tags = {
             'versionned_latest': '{}-latest'.format(self._version)
@@ -154,6 +155,7 @@ class DockerHelper(AWSHelper):
 @click.version_option(VERSION)
 @click.pass_context
 def cli(ctx):
+    """CLI helper for AWS CodeBuild and CodePipeline"""
     pass
 
 
@@ -191,7 +193,7 @@ def login(aws):
     logincmd = ['docker', 'login', '-u', user, '-p', token, endpoint]
     subprocess.call(logincmd)
 
-
+# TODO: Add option to delete old images
 @ecr.command()
 @click.argument('repository-name', envvar='IMAGE_NAME')
 @pass_aws
