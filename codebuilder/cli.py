@@ -10,9 +10,18 @@ import dpath.util
 
 from base64 import b64decode
 
+
 class BaseHelper(object):
+
     def __init__(self):
         pass
+
+    def get_version(self):
+        version = 'edge'
+        if os.path.isfile('VERSION'):
+            with click.open_file('VERSION', 'r') as f:
+                version = f.read().strip()
+        return version
 
     def output(self, value=None, format=None, jsonpath=None, source_json_file=None, in_place=False):
         if format == 'json':
@@ -30,9 +39,48 @@ class BaseHelper(object):
         elif format == 'text':
             click.echo(value)
 
+
 class AWSHelper(BaseHelper):
+
     def __init__(self):
         self._session = boto3.session.Session()
+
+    def codepipeline_get_artifacts_revision(self):
+        CODEBUILD_BUILD_ID = os.getenv('CODEBUILD_BUILD_ID')
+        CODEBUILD_INITIATOR = os.getenv('CODEBUILD_INITIATOR')
+
+        if not CODEBUILD_BUILD_ID or not CODEBUILD_INITIATOR:
+            return None
+
+        (service, pipeline_name) = CODEBUILD_INITIATOR.split('/')
+        client = self._session.client('codepipeline')
+        response = client.get_pipeline_state(name=pipeline_name)
+
+        pipeline_execution_id = None
+        for stage_state in response['stageStates']:
+            if CODEBUILD_BUILD_ID in dpath.util.values(stage_state, '/actionStates/*/latestExecution/externalExecutionId'):
+                pipeline_execution_id = stage_state['latestExecution']['pipelineExecutionId']
+                break
+
+        if not pipeline_execution_id:
+            return None
+
+        response = client.get_pipeline_execution(
+            pipelineName=pipeline_name,
+            pipelineExecutionId=pipeline_execution_id
+        )
+
+        return response['pipelineExecution']['artifactRevisions']
+
+    def codepipeline_get_artifact_attribute(self, name, attribute):
+        artifacts = self.codepipeline_get_artifacts_revision()
+        if not name:
+            return artifacts[0].get(attribute, None)
+        else:
+            for artifact in artifacts:
+                if name == artifact['name']:
+                    return artifact.get(attribute, None)
+        return None
 
     def ecr_get_authorization(self):
         client = self._session.client('ecr')
@@ -62,45 +110,45 @@ class AWSHelper(BaseHelper):
 
 pass_aws = click.make_pass_decorator(AWSHelper, ensure=True)
 
-class DockerHelper(BaseHelper):
-    def __init__(self, aws_account_id=None, aws_region=None, build_id=None, image_name=None, version=None):
-        self._aws_account_id = aws_account_id or self.__guess_account_id()
-        self._aws_region = aws_region
-        self._build_id = build_id
-        self._image_version = version or self.__guess_version()
-        self._image_name = self._aws_account_id + '.dkr.ecr.' + self._aws_region + '.amazonaws.com/' + image_name
-        self._full_image_name = '{}:latest'.format(self._image_name)
-        self._versionned_image_name = '{}:{}'.format(self._image_name, self._image_version)
 
-    def build(self):
-        cmdline = ['docker', 'build', '-t']
-        cmdline += [self._image_name]
-        cmdline += ['--build-arg', 'build_id=' + self._build_id]
-        if self._image_version:
-            cmdline += ['--build-arg', 'app_version=' + self._image_version]
-        cmdline += ['.']
-        subprocess.call(cmdline)
+class DockerHelper(AWSHelper):
 
-    def tag(self):
-        cmdline = ['docker', 'tag', self._full_image_name, '{}:{}'.format(self._image_name, self._image_version)]
-        subprocess.call(cmdline)
+    def __init__(self, image_name=None, artifact_name=None):
+        super(DockerHelper, self).__init__()
 
-    def image_name(self):
-        return self._image_name
+        self._image_name = image_name
+        self._version = self.get_version()
+        self._revision_id = self.codepipeline_get_artifact_attribute(artifact_name, 'revisionId')[:8]
+        self._branch = os.getenv('GITHUB_BRANCH', None)
+        self._build_id = os.getenv('CODEBUILD_BUILD_ID', 'CUSTOM_BUILD')
 
-    def versionned_image_name(self):
-        return self._versionned_image_name
+        self._available_tags = {
+            'versionned_latest': '{}-latest'.format(self._version)
+        }
 
-    def __guess_account_id(self):
-        click.echo('[WARNING] No AWS_ACCOUNT_ID supplied, trying to guess ...', err=True)
-        return boto3.client('sts').get_caller_identity().get('Account')
+        if self._revision_id:
+            self._available_tags['full'] = '{}-{}'.format(self._version, self._revision_id)
 
-    def __guess_version(self):
-        version = None
-        if os.path.isfile('VERSION'):
-            with click.open_file('VERSION', 'r') as f:
-                version = f.read().strip()
-        return version
+        if self._branch:
+            self._available_tags['branch'] = self._branch
+
+        self._available_images = {}
+        for k, v in self._available_tags.items():
+            self._available_images[k] = '{}:{}'.format(self._image_name, v)
+
+    def get_image(self, tag):
+        return self._available_images.get(tag, None)
+
+    def get_tag(self, tag):
+        return self._available_tags.get(tag, None)
+
+    def get_apply_tags_commands(self, tags=[]):
+        commands = []
+        for tag in tags:
+            if tag in self._available_images:
+                commands.append(['docker', 'tag', self._image_name, self._available_images[tag]])
+        return commands
+
 
 @click.group()
 @click.version_option(VERSION)
@@ -108,14 +156,16 @@ class DockerHelper(BaseHelper):
 def cli(ctx):
     pass
 
+
 @cli.group()
-@click.pass_context
-def aws(ctx):
-    ctx.obj = AWSHelper()
+def aws():
+    pass
+
 
 @aws.group()
 def kms():
     pass
+
 
 @kms.command()
 @click.argument('blob')
@@ -128,9 +178,11 @@ def decrypt(aws, blob, format, source_json_file, in_place, jsonpath):
     value = aws.kms_decrypt(blob)
     aws.output(value, format, jsonpath, source_json_file, in_place)
 
+
 @aws.group()
 def ecr():
     pass
+
 
 @ecr.command()
 @pass_aws
@@ -139,46 +191,78 @@ def login(aws):
     logincmd = ['docker', 'login', '-u', user, '-p', token, endpoint]
     subprocess.call(logincmd)
 
+
 @ecr.command()
-@click.argument('repository-name', envvar='IMAGE_REPO_NAME')
+@click.argument('repository-name', envvar='IMAGE_NAME')
 @pass_aws
 def prune(aws, repository_name):
     aws.ecr_prune(repository_name)
 
+
+@aws.group()
+def codepipeline():
+    pass
+
+
+@codepipeline.command('get-revision')
+@click.option('--artifact-name')
+@click.option('--short', is_flag=True)
+@click.argument('attribute', type=click.Choice(['revisionUrl', 'name', 'created', 'revisionId', 'revisionSummary', 'revisionChangeIdentifier']), default='revisionId')
+@pass_aws
+def get_revision(aws, artifact_name, short, attribute):
+    value = aws.codepipeline_get_artifact_attribute(artifact_name, attribute)
+    if attribute == 'revisionId' and short:
+        value = value[:8]
+    click.echo(value)
+
+
 @cli.group()
-@click.option('--aws-account-id', envvar='AWS_ACCOUNT_ID', help='AWS Account Number [default: $AWS_ACCOUNT_ID]')
-@click.option('--aws-region', envvar='AWS_DEFAULT_REGION', default='eu-west-1')
-@click.option('--build-id', envvar='CODEBUILD_BUILD_ID', default='CUSTOM_BUILD')
-@click.option('--image-name', envvar='IMAGE_REPO_NAME')
-@click.option('--version')
+@click.argument('image-name')
+@click.option('--artifact-name')
 @click.pass_context
-def docker(ctx, aws_account_id, aws_region, build_id, image_name, version):
-    ctx.obj = DockerHelper(aws_account_id, aws_region, build_id, image_name, version)
+def docker(ctx, image_name, artifact_name):
+    ctx.obj = DockerHelper(image_name, artifact_name)
 
-@docker.command()
-@click.pass_context
-def build(ctx):
-    ctx.obj.build()
-    ctx.obj.tag()
-
-@docker.command()
-@click.pass_context
-def push(ctx):
-    cmdline = ['docker', 'push', ctx.obj.image_name()]
-    subprocess.call(cmdline)
 
 @docker.command('get-image')
+@click.argument('tag', type=click.Choice(['full', 'branch', 'versionned_latest']))
 @click.option('--format', type=click.Choice(['text', 'json']), default='json')
 @click.option('--source-json-file', type=click.File('r+'))
 @click.option('--in-place', is_flag=True)
 @click.argument('jsonpath', nargs=-1)
-@click.pass_context
-def get_image(ctx, format, source_json_file, in_place, jsonpath):
-    ctx.obj.output(ctx.obj.versionned_image_name(), format, jsonpath, source_json_file, in_place)
+@click.pass_obj
+def get_image(dkr, tag, format, source_json_file, in_place, jsonpath):
+    tag = dkr.get_image(tag)
+    if tag:
+        dkr.output(tag, format, jsonpath, source_json_file, in_place)
+
+
+@docker.command('get-tag')
+@click.argument('tag', type=click.Choice(['full', 'branch', 'versionned_latest']))
+@click.option('--format', type=click.Choice(['text', 'json']), default='json')
+@click.option('--source-json-file', type=click.File('r+'))
+@click.option('--in-place', is_flag=True)
+@click.argument('jsonpath', nargs=-1)
+@click.pass_obj
+def get_tag(dkr, tag, format, source_json_file, in_place, jsonpath):
+    tag = dkr.get_tag(tag)
+    if tag:
+        dkr.output(tag, format, jsonpath, source_json_file, in_place)
+
+
+@docker.command('apply-tags')
+@click.option('--tag', multiple=True, type=click.Choice(['full', 'branch', 'versionned_latest']))
+@click.pass_obj
+def apply_tags(dkr, tag):
+    commands = dkr.get_apply_tags_commands(tag)
+    for command in commands:
+        subprocess.call(command)
+
 
 @cli.group()
 def github():
     pass
+
 
 @github.command('ssh-config')
 @click.argument('encrypted-ssh-key', envvar='ENCRYPTED_SSH_KEY')
