@@ -6,7 +6,11 @@ import subprocess
 import json
 import click
 import boto3
+import botocore
 import dpath.util
+
+import botocore.vendored.requests.packages.urllib3 as urllib3
+urllib3.disable_warnings(urllib3.exceptions.SecurityWarning)
 
 from base64 import b64decode
 
