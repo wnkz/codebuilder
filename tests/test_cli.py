@@ -15,3 +15,13 @@ class TestAWS:
     def test_base(self):
         r = runner.invoke(codebuilder, ['aws'])
         assert r.exit_code == 0
+
+class TestDocker:
+    def test_base(self):
+        r = runner.invoke(codebuilder, ['docker'])
+        assert r.exit_code == 0
+
+class TestGithub:
+    def test_base(self):
+        r = runner.invoke(codebuilder, ['github'])
+        assert r.exit_code == 0
