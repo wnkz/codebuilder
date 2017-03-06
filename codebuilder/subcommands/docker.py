@@ -9,9 +9,6 @@ from codebuilder.helpers.docker import DockerHelper
 @click.option('--artifact-name', help='CodePipeline artifact name. Default: First artifact')
 @click.pass_context
 def docker(ctx, image_name, artifact_name):
-    """
-    CodeBuilder Docker command
-    """
     ctx.obj = DockerHelper(image_name, artifact_name)
 
 
