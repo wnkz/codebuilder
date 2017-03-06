@@ -24,9 +24,8 @@ class BaseHelper(object):
             dpath.util.new(d, list(jsonpath) or '/value', value)
             if in_place:
                 source_json_file.seek(0)
-                click.echo(json.dumps(d, indent=2, sort_keys=True), file=source_json_file)
-                pass
+                json.dump(d, source_json_file, indent=2, sort_keys=True)
             else:
-                click.echo(json.dumps(d, indent=2, sort_keys=True))
+                print(json.dumps(d, indent=2, sort_keys=True))
         elif format == 'text':
-            click.echo(value)
+            print(value)

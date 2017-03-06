@@ -12,6 +12,7 @@ class DockerHelper(AWSHelper):
         self._branch = os.getenv('GITHUB_BRANCH', None)
         self._build_id = os.getenv('CODEBUILD_BUILD_ID', None)
         self._revision_id = self.codepipeline_get_artifact_attribute(artifact_name, 'revisionId')
+        self._short_revision_id = None
         if self._revision_id:
             self._short_revision_id = self._revision_id[:8]
 

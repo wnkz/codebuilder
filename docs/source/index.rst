@@ -15,6 +15,7 @@ Quickstart
    :maxdepth: 2
 
    guide/quickstart
+   guide/codebuild
 
 User Guide
 ----------

@@ -77,8 +77,8 @@ class AWSHelper(BaseHelper):
                 repositoryName=repository_name,
                 imageIds=images_to_delete
             )
-            for image in response['imageIds']:
-                click.echo('Deleted image: {}'.format(image['imageDigest']))
+            return response['imageIds']
+        return []
 
     def kms_decrypt(self, blob):
         return self._session.client('kms').decrypt(CiphertextBlob=b64decode(blob))['Plaintext']

@@ -74,9 +74,18 @@ def get_tag(dkr, tag, format, source_json_file, in_place, jsonpath):
 
 
 @docker.command('apply-tags')
-@click.option('--tag', '-t', multiple=True, type=click.Choice(DEFAULT_TAG_CHOICE))
+@click.option('--tag', '-t', 'tags', multiple=True, type=click.Choice(DEFAULT_TAG_CHOICE))
 @click.pass_obj
-def apply_tags(dkr, tag):
-    commands = dkr.get_apply_tags_commands(tag)
+def apply_tags(dkr, tags):
+    """
+    Apply tags to Docker image.
+
+    Examples:
+
+      \b
+      > codebuilder docker --image-name foo/bar apply-tags -t version
+      `docker tag foo/bar foo/bar:1.0.0`
+    """
+    commands = dkr.get_apply_tags_commands(tags)
     for command in commands:
         subprocess.call(command)
