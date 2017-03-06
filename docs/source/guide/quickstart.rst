@@ -5,7 +5,7 @@ Quickstart
 
 Installation
 ------------
-Install the latest Boto 3 release via :command:`pip`::
+Install the latest CodeBuilder release via :command:`pip`::
 
     pip install codebuilder
 
