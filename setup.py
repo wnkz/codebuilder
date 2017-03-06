@@ -53,7 +53,12 @@ setup(
 
     keywords='aws codebuild codepipeline docker kms',
 
-    packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+    packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
+    package_data={
+        'codebuilder': [
+            'codebuilder-complete.sh'
+        ]
+    },
     include_package_data=True,
 
     install_requires=[
