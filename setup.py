@@ -53,20 +53,34 @@ setup(
 
     keywords='aws codebuild codepipeline docker kms',
 
-    packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+    packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
+    package_data={
+        'codebuilder': [
+            'codebuilder-complete.sh'
+        ]
+    },
+    include_package_data=True,
 
-    install_requires = [
+    install_requires=[
         'click==6.7',
         'botocore>=1.5.0,<1.6.0',
         'boto3>=1.4.4',
         'dpath==1.4'
     ],
 
-    entry_points = {
+    entry_points={
         'console_scripts': [
             'codebuilder=codebuilder.cli:cli',
         ],
     },
+
+    setup_requires=[
+        'pytest-runner'
+    ],
+
+    tests_require=[
+        'pytest'
+    ],
 
     zip_safe=False
 )
