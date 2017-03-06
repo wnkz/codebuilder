@@ -1,18 +1,30 @@
 CodeBuilder - CLI helper for easy CI on AWS
 ===========================================
 
-|Build Status| |Version|
+|Build Status| |Docs| |Version| |License|
 
 CodeBuilder is a CLI tool which allows developpers to use simple commands
 and helpers inside AWS CI/CD tools like CodePipeline and CodeBuild.
+
+
+.. _`stable docs`: https://codebuilder.readthedocs.io/en/stable/
+.. _`Read the Docs`: https://codebuilder.readthedocs.io/en/latest/
+
+.. |Build Status| image:: https://img.shields.io/travis/wnkz/codebuilder/master.svg?style=flat
+    :target: https://travis-ci.org/wnkz/codebuilder
+    :alt: Build Status
+
+.. |Docs| image:: https://readthedocs.org/projects/codebuilder/badge/?version=latest
+    :target: http://codebuilder.readthedocs.io/en/latest/?badge=latest
+    :alt: Read the docs
 
 .. |Version| image:: https://img.shields.io/pypi/v/codebuilder.svg?style=flat
     :target: https://pypi.python.org/pypi/codebuilder/
     :alt: Version
 
-.. |Build Status| image:: https://img.shields.io/travis/wnkz/codebuilder/master.svg?style=flat
-    :target: https://travis-ci.org/wnkz/codebuilder
-    :alt: Build Status
+.. |License| image:: http://img.shields.io/pypi/l/codebuilder.svg?style=flat
+    :target: https://github.com/wnkz/codebuilder/blob/master/LICENSE
+    :alt: License
 
 Quick Start
 -----------
