@@ -3,7 +3,7 @@ CodeBuilder - CLI helper for easy CI on AWS
 
 |Build Status| |Docs| |Version| |License|
 
-CodeBuilder is a CLI tool which allows developpers to use simple commands
+CodeBuilder is a CLI tool which allows developers to use simple commands
 and helpers inside AWS CI/CD tools like CodePipeline and CodeBuild.
 
 
